@@ -22,7 +22,7 @@ import { UserModule } from "./modules/user/user.module";
       load: [global_config],
     }),
     UserModule,
-    // new module will come here 
+    // New module will come here 
   ],
   controllers: [AppController],
   providers: [AppService],

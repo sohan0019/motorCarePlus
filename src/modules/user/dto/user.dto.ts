@@ -1,36 +1,36 @@
-import { IsNotEmpty, IsOptional } from "class-validator";
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { RoleEnum } from '../../../common/enums/role.enum';
 
 export class CreateUserDto {
-  @IsNotEmpty()
-  name: string = "";
+  @IsEmail({}, { message: 'Please provide a valid email address' })
+  @IsNotEmpty({ message: 'Email cannot be empty' })
+  email!: string;
 
-  @IsNotEmpty()
-  email: string = "";
+  @IsString()
+  @IsNotEmpty({ message: 'Password cannot be empty' })
+  @Matches(/^(?=.*[A-Za-z])(?=.*\d).{6,}$/,{message: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character'})
+  password!: string;
 
-  @IsNotEmpty()
-  password: string = "";
+  @IsString()
+  @IsNotEmpty({ message: 'Full name cannot be empty' })
+  full_name!: string;
 
   @IsOptional()
-  created_at?: Date = new Date();
+  @IsString()
+  phone_number?: string;
 
   @IsOptional()
-  updated_at?: Date = new Date();
+  @IsEnum(RoleEnum)
+  role?: RoleEnum;
 }
 
 export class UpdateUserDto {
   @IsOptional()
-  name: string = "";
+  @IsString()
+  @IsNotEmpty({ message: 'Full name cannot be empty' })
+  full_name?: string;
 
   @IsOptional()
-  email: string = "";
-
-  @IsOptional()
-  password: string = "";
-
-  @IsOptional()
-  created_at?: Date = new Date();
-
-  @IsOptional()
-  updated_at?: Date = new Date();
+  @IsString()
+  phone_number?: string;
 }
-
