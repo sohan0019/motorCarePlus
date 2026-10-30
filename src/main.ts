@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { join } from "path";
+import { ValidationPipe } from "@nestjs/common"; 
 
 dotenv.config();
 
@@ -37,14 +38,21 @@ async function bootstrap() {
     }),
   );
 
-  // 1. Logger
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     const now = new Date().toISOString().replace("T", " ").replace(/\..+/, "");
     console.log(`[HTTP] [${now}] ${req.method} ${req.originalUrl}`);
     next();
   });
 
-  // 2. Swagger Configuration
   const config = new DocumentBuilder()
     .setTitle("KDex API")
     .setVersion("1.0")
@@ -53,12 +61,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("api", app, document);
 
-  // 3. Cookie Parser
   const cookieSecret =
     process.env.COOKIE_SECRET || "fallback-secret-dont-use-in-prod";
   app.use(cookieParser(cookieSecret));
 
-  // 4. CORS Configuration
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",").map((origin) => origin.trim())
     : [];

@@ -1,38 +1,34 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-} from "@nestjs/common";
-import { UserService } from "./user.service";
-import { CreateUserDto } from "./dto/user.dto";
+import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { UserService } from './user.service';
+import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { QueryParserPipe } from '../../common/pipes/QueryParserPipe';
 
-@Controller("users") // link r end point local host 5001/
+@Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Get()
-  async getUsers() {
-    return await this.userService.getUsers();
-  }
-
-  
   @Post()
-  async createUser(@Body() dto: CreateUserDto) {
-    return await this.userService.createUser(dto);
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.userService.create(createUserDto);
   }
 
-  @Patch(":id")
-  async updateUser(@Param("id") id: string, @Body() dto: CreateUserDto) {
-    return await this.userService.updateUser(id, dto);
+  @Get()
+  findAll(@Query(QueryParserPipe) query: any) {
+    return this.userService.findAll(query);
   }
 
-  @Delete(":id")
-  async deleteUser(@Param("id") id: string) {
-    return await this.userService.deleteUser(id);
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(id);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.userService.update(id, updateUserDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.userService.remove(id);
   }
 }
-
