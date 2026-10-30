@@ -39,7 +39,7 @@ export class CreateTable1775500022201 implements MigrationInterface{
           {
             name: 'role',
             type: 'varchar',
-            default: "'USER'",
+            default: "'ROLE_USER'",
             isNullable: false,
           },
           {
