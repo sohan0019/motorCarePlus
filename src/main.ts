@@ -54,7 +54,7 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle("KDex API")
+    .setTitle("MotorCare+ API")
     .setVersion("1.0")
     .addBearerAuth()
     .build();

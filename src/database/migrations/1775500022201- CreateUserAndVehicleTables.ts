@@ -1,13 +1,13 @@
-import { MigrationInterface, QueryRunner, Table, TableForeignKey } from "typeorm";
+import { MigrationInterface, QueryRunner, Table, TableForeignKey } from 'typeorm';
 
-export class CreateTable1775500022201 implements MigrationInterface{
-  public async up(queryRunner:QueryRunner):Promise<void>
+export class CreateUserAndVehicleTables1775500022201 implements MigrationInterface {
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
 
-  {
     await queryRunner.createTable(
       new Table({
-        name:"users",
-        columns:[
+        name: 'users',
+        columns: [
           {
             name: 'id',
             type: 'uuid',
@@ -45,17 +45,18 @@ export class CreateTable1775500022201 implements MigrationInterface{
           {
             name: 'created_at',
             type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP(6)',
+            default: 'now()',
             isNullable: false,
           },
           {
             name: 'updated_at',
             type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP(6)',
+            default: 'now()',
             isNullable: false,
           },
         ],
-      })
+      }),
+      true,
     );
 
     await queryRunner.createTable(
@@ -72,10 +73,15 @@ export class CreateTable1775500022201 implements MigrationInterface{
           {
             name: 'name',
             type: 'varchar',
-            isUnique: true,
+            isNullable: false,
+          },
+          {
+            name: 'vehicle_type',
+            type: 'varchar',
             isNullable: false,
           },
         ],
+        uniques: [{ columnNames: ['name', 'vehicle_type'] }],
       }),
       true,
     );
@@ -133,24 +139,19 @@ export class CreateTable1775500022201 implements MigrationInterface{
             isNullable: false,
           },
           {
+            name: 'model_id',
+            type: 'uuid',
+            isNullable: false,
+          },
+          {
             name: 'type',
-            type: 'varchar',
-            isNullable: false,
-          },
-          {
-            name: 'make',
-            type: 'varchar',
-            isNullable: false,
-          },
-          {
-            name: 'model',
             type: 'varchar',
             isNullable: false,
           },
           {
             name: 'year',
             type: 'int',
-            isNullable: false,
+            isNullable: true,
           },
           {
             name: 'registration_number',
@@ -184,33 +185,35 @@ export class CreateTable1775500022201 implements MigrationInterface{
         onDelete: 'CASCADE',
       }),
     );
+
+    await queryRunner.createForeignKey(
+      'vehicles',
+      new TableForeignKey({
+        columnNames: ['model_id'],
+        referencedColumnNames: ['id'],
+        referencedTableName: 'vehicle_models',
+      }),
+    );
   }
 
-  public async down(queryRunner: QueryRunner):Promise<void> {
+  public async down(queryRunner: QueryRunner): Promise<void> {
     const vehicleTable = await queryRunner.getTable('vehicles');
     if (vehicleTable) {
-      const userForeignKey = vehicleTable.foreignKeys.find(
-        (fk) => fk.columnNames.indexOf('user_id') !== -1,
-      );
-      if (userForeignKey) {
-        await queryRunner.dropForeignKey('vehicles', userForeignKey);
+      for (const foreignKey of vehicleTable.foreignKeys) {
+        await queryRunner.dropForeignKey('vehicles', foreignKey);
       }
     }
-    await queryRunner.dropTable('vehicles');
+    await queryRunner.dropTable('vehicles', true);
 
     const modelTable = await queryRunner.getTable('vehicle_models');
     if (modelTable) {
-      const makeForeignKey = modelTable.foreignKeys.find(
-        (fk) => fk.columnNames.indexOf('make_id') !== -1,
-      );
-      if (makeForeignKey) {
-        await queryRunner.dropForeignKey('vehicle_models', makeForeignKey);
+      for (const foreignKey of modelTable.foreignKeys) {
+        await queryRunner.dropForeignKey('vehicle_models', foreignKey);
       }
     }
-    await queryRunner.dropTable('vehicle_models');
+    await queryRunner.dropTable('vehicle_models', true);
 
-    await queryRunner.dropTable('vehicle_makes');
-    await queryRunner.dropTable('users');
+    await queryRunner.dropTable('vehicle_makes', true);
+    await queryRunner.dropTable('users', true);
   }
-  
 }
