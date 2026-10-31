@@ -13,7 +13,7 @@ export class UserController {
   }
 
   @Get()
-  findAll(@Query(QueryParserPipe) query: any) {
+  findAll(@Query(new QueryParserPipe('MANY')) query: any) {
     return this.userService.findAll(query);
   }
 
