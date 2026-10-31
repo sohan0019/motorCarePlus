@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindManyOptions, Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { UserEntity } from './entities/user.entity';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
-import * as bcrypt from 'bcrypt';
+import { RoleEnum } from '../../common/enums/role.enum';
 
 @Injectable()
 export class UserService {
@@ -12,45 +13,35 @@ export class UserService {
     private readonly userRepository: Repository<UserEntity>,
   ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<UserEntity> {
-    const salt = await bcrypt.genSalt();
-    const password_hash = await bcrypt.hash(createUserDto.password, salt);
+  async create(createUserDto: CreateUserDto) {
+    const email = createUserDto.email.toLowerCase();
+    const existing = await this.userRepository.findOne({ where: { email } });
+    if (existing) {
+      throw new ConflictException('Email is already registered');
+    }
 
-    const user = this.userRepository.create({
-      ...createUserDto,
-      password_hash,
-    });
+    const password_hash = await bcrypt.hash(createUserDto.password, 10);
+    const saved = await this.userRepository.save(
+      this.userRepository.create({
+        email,
+        password_hash,
+        full_name: createUserDto.full_name,
+        phone_number: createUserDto.phone_number ?? null,
+        role: RoleEnum.USER, 
+      }),
+    );
 
-    return this.userRepository.save(user);
+    const { password_hash: _removed, ...safeUser } = saved;
+    return safeUser;
   }
 
-  async findAll(query: any): Promise<{ data: UserEntity[]; total: number }> {
-    const { skip, take, sortBy, sortOrder, search, filter } = query;
-
-    const queryBuilder = this.userRepository.createQueryBuilder('user');
-
-    if (search) {
-      queryBuilder.andWhere(
-        '(user.full_name ILIKE :search OR user.email ILIKE :search)',
-        { search: `%${search}%` },
-      );
-    }
-
-    if (filter) {
-      Object.keys(filter).forEach((key) => {
-        queryBuilder.andWhere(`user.${key} = :${key}`, { [key]: filter[key] });
-      });
-    }
-
-    if (sortBy) {
-      queryBuilder.orderBy(`user.${sortBy}`, sortOrder || 'ASC');
-    } else {
-      queryBuilder.orderBy('user.created_at', 'DESC');
-    }
-
-    queryBuilder.skip(skip || 0).take(take || 10);
-
-    const [data, total] = await queryBuilder.getManyAndCount();
+  async findAll(query: FindManyOptions<UserEntity>) {
+    const [data, total] = await this.userRepository.findAndCount({
+      order: { created_at: 'DESC' },
+      take: 10,
+      ...query,
+      select: undefined,
+    });
     return { data, total };
   }
 
@@ -63,12 +54,16 @@ export class UserService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<UserEntity> {
-    await this.userRepository.update(id, updateUserDto);
+    await this.findOne(id);
+    if (Object.keys(updateUserDto).length > 0) {
+      await this.userRepository.update(id, updateUserDto);
+    }
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string) {
     const user = await this.findOne(id);
     await this.userRepository.remove(user);
+    return { message: 'User deleted' };
   }
 }

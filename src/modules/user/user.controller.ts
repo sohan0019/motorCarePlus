@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param,  Put, Delete, Query, ParseUUIDPipe, } from '@nestjs/common';
+import { FindManyOptions } from 'typeorm';
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { QueryParserPipe } from '../../common/pipes/QueryParserPipe';
+import { UserEntity } from './entities/user.entity';
 
 @Controller('users')
 export class UserController {
@@ -13,22 +15,28 @@ export class UserController {
   }
 
   @Get()
-  findAll(@Query(new QueryParserPipe('MANY')) query: any) {
+  findAll(
+    @Query(new QueryParserPipe('MANY', ['full_name', 'email']))
+    query: FindManyOptions<UserEntity>,
+  ) {
     return this.userService.findAll(query);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.findOne(id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
     return this.userService.update(id, updateUserDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.remove(id);
   }
 }
