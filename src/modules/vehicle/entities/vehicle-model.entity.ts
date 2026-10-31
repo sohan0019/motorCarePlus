@@ -6,13 +6,14 @@ export class VehicleModelEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   name!: string;
 
-  @Column()
+  @Column({ type: 'uuid' })
   make_id!: string;
 
   @ManyToOne(() => VehicleMakeEntity, (make) => make.models, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'make_id' })
   make!: VehicleMakeEntity;
+
 }

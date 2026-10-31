@@ -6,9 +6,13 @@ import { VehicleCatalogController } from './vehicle-catalog.controller';
 import { VehicleEntity } from './entities/vehicle.entity';
 import { VehicleMakeEntity } from './entities/vehicle-make.entity';
 import { VehicleModelEntity } from './entities/vehicle-model.entity';
+import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([VehicleEntity, VehicleMakeEntity, VehicleModelEntity])],
+  imports: [
+    TypeOrmModule.forFeature([VehicleEntity, VehicleMakeEntity, VehicleModelEntity]),
+    UserModule,
+  ],
   controllers: [VehicleController, VehicleCatalogController],
   providers: [VehicleService],
   exports: [VehicleService],
