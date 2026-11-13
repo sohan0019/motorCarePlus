@@ -11,6 +11,10 @@ import { ServiceCatalogModule } from "./modules/service-catalog/service-catalog.
 import { BookingsModule } from "./modules/booking/booking.module";
 import { CatalogueModule } from "./modules/catalogue/catalogue.module";
 import { ProductModule } from "./modules/product/product.module";
+import { CartModule } from "./modules/cart/cart.module";
+import { OrderModule } from "./modules/order/order.module";
+import { PaymentModule } from "./modules/payment/payment.module";
+import { AuthModule } from "./modules/auth/auth.module";
 
 @Module({
   imports: [
@@ -38,6 +42,11 @@ import { ProductModule } from "./modules/product/product.module";
     BookingsModule,
     CatalogueModule,
     ProductModule,
+    CartModule,
+    OrderModule,
+    PaymentModule,
+    AuthModule,
+    
   ],
   controllers: [AppController],
   providers: [AppService],
