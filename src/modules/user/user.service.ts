@@ -1,6 +1,6 @@
-import { ConflictException, Injectable, NotFoundException, } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindManyOptions, QueryFailedError, Repository } from 'typeorm';
+import { EntityPropertyNotFoundError, FindManyOptions, QueryFailedError, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { UserEntity } from './entities/user.entity';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
@@ -44,20 +44,27 @@ export class UserService {
   }
 
   async findAll(query: FindManyOptions<UserEntity> = {}) {
-    const { select, relations, loadRelationIds, withDeleted, take, ...rest } = query;
+    const { select, relations, loadRelationIds, withDeleted, take, ...rest } =
+      query;
 
     const safeTake = Math.min(
       Math.max(Number(take) || DEFAULT_PAGE_SIZE, 1),
       MAX_PAGE_SIZE,
     );
 
-    const [data, total] = await this.userRepository.findAndCount({
-      order: { created_at: 'DESC' },
-      ...rest,
-      take: safeTake,
-    });
-
-    return { data, total };
+    try {
+      const [data, total] = await this.userRepository.findAndCount({
+        order: { created_at: 'DESC' },
+        ...rest,
+        take: safeTake,
+      });
+      return { data, total };
+    } catch (e) {
+      if (e instanceof EntityPropertyNotFoundError) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
+    }
   }
 
   async findOne(id: string): Promise<UserEntity> {
@@ -108,7 +115,6 @@ export class UserService {
       this.rethrowIfDuplicateEmail(e);
       throw e;
     }
-
     return this.findOne(id);
   }
 
