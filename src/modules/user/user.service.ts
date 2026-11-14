@@ -10,6 +10,7 @@ const SALT_ROUNDS = 10;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
 const PG_UNIQUE_VIOLATION = '23505';
+const PG_FOREIGN_KEY_VIOLATION = '23503';
 
 export type SafeUser = Omit<UserEntity, 'password_hash'>;
 
@@ -126,7 +127,17 @@ export class UserService {
 
   async remove(id: string) {
     const user = await this.findOne(id);
-    await this.userRepository.remove(user);
+    try {
+      await this.userRepository.remove(user);
+    } catch (e) {
+      if (
+        e instanceof QueryFailedError &&
+        (e as any).driverError?.code === PG_FOREIGN_KEY_VIOLATION
+      ) {
+        throw new ConflictException('This user has orders and cannot be deleted');
+      }
+      throw e;
+    }
     return { message: 'User deleted' };
   }
 
