@@ -1,11 +1,32 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, FindManyOptions, In, Repository } from 'typeorm';
-import { BookingEntity, BookingStatusEnum} from './entities/booking.entity';
+
+import {
+  DataSource,
+  FindManyOptions,
+  FindOptionsWhere,
+  In,
+  Repository,
+} from 'typeorm';
+
+import {
+  BookingEntity,
+  BookingStatusEnum,
+} from './entities/booking.entity';
+
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
+
 import { ServiceEntity } from '../service-catalog/entities/service.entity';
 import { VehicleEntity } from '../vehicle/entities/vehicle.entity';
+
 import type { AuthUser } from '../auth/jwt.strategy';
 import { RoleEnum } from '../../common/enums/role.enum';
 
@@ -17,10 +38,13 @@ export class BookingsService {
   constructor(
     @InjectRepository(BookingEntity)
     private readonly bookingRepository: Repository<BookingEntity>,
+
     @InjectRepository(ServiceEntity)
     private readonly serviceRepository: Repository<ServiceEntity>,
+
     @InjectRepository(VehicleEntity)
     private readonly vehicleRepository: Repository<VehicleEntity>,
+
     private readonly dataSource: DataSource,
   ) {}
 
@@ -128,6 +152,7 @@ export class BookingsService {
     }
   }
 
+  // CREATE BOOKING
   async create(
     dto: CreateBookingDto,
     user: AuthUser,
@@ -284,6 +309,8 @@ export class BookingsService {
       return bookingRepo.save(booking);
     });
   }
+
+  // GET ALL BOOKINGS
   async findAll(
     query: FindManyOptions<BookingEntity>,
     user: AuthUser,
@@ -291,7 +318,7 @@ export class BookingsService {
     data: BookingEntity[];
     total: number;
   }> {
-    // Read pagination values from QueryParserPipe
+    // Pagination
     const requestedLimit = Number(query?.take ?? 10);
     const requestedOffset = Number(query?.skip ?? 0);
 
@@ -305,11 +332,36 @@ export class BookingsService {
     const offset = Number.isFinite(requestedOffset)
       ? Math.max(Math.floor(requestedOffset), 0)
       : 0;
-    const where = this.isAdmin(user)
-      ? {}
-      : { user_id: user.user_id };
 
-    // Fetch paginated bookings and total count
+    // Admin can see all bookings.
+    // Normal users can only see their own bookings.
+    const ownerWhere: FindOptionsWhere<BookingEntity> =
+      this.isAdmin(user)
+        ? {}
+        : { user_id: user.user_id };
+
+    // Preserve filters created by QueryParserPipe.
+    const base = query?.where ?? {};
+
+    // Combine query filters with ownership condition.
+    const where:
+      | FindOptionsWhere<BookingEntity>
+      | FindOptionsWhere<BookingEntity>[] =
+      Array.isArray(base)
+        ? (
+            base.length
+              ? base.map((condition) => ({
+                  ...condition,
+                  ...ownerWhere,
+                }))
+              : ownerWhere
+          )
+        : {
+            ...base,
+            ...ownerWhere,
+          };
+
+    // Fetch bookings
     const [data, total] =
       await this.bookingRepository.findAndCount({
         ...query,
@@ -318,7 +370,8 @@ export class BookingsService {
 
         relations: ['user', 'vehicle', 'service'],
 
-        order: {
+        // Keep requested sorting.
+        order: query?.order ?? {
           created_at: 'DESC',
         },
 
@@ -332,6 +385,7 @@ export class BookingsService {
     };
   }
 
+  // GET SINGLE BOOKING
   async findOne(
     id: number,
     user: AuthUser,
@@ -350,6 +404,7 @@ export class BookingsService {
     return booking;
   }
 
+  // UPDATE BOOKING STATUS
   async updateStatus(
     id: number,
     dto: UpdateBookingStatusDto,
@@ -404,6 +459,7 @@ export class BookingsService {
     return this.bookingRepository.save(booking);
   }
 
+  // GET AVAILABLE SLOTS
   async getAvailableSlots(
     serviceId: number,
     date: string,
