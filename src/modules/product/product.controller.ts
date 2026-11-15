@@ -1,61 +1,55 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Put,
-  Query,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Body,Controller,Delete,Get,Param,ParseIntPipe,Patch,Post,Put, Query,Req,UploadedFile,UseGuards,UseInterceptors} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { AuthGuard } from '@nestjs/passport';
 import { ProductService } from './product.service';
-import {
-  CreateProductDto,
-  GetProductQueryDto,
-  ListProductsQueryDto,
-  SetCompatibilityDto,
-  UpdateProductDto,
-} from './dto/product.dto';
+import { CreateProductDto,GetProductQueryDto,ListProductsQueryDto,SetCompatibilityDto,UpdateProductDto} from './dto/product.dto';
 import { productPhotoMulterOptions } from '../../providers/storage/local/multer.options';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { OptionalJwtGuard, RolesGuard } from '../../common/guard';
+import { RoleEnum } from '../../common/enums/role.enum';
+import { isAdminUser } from '../../common/helpers/admin.helper';
+import type { AuthUser } from '../auth/jwt.strategy';
 
-// TODO (after auth): create, bulk, update, deactivate, compatibility and photo are admin only
 @Controller('products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  // GET /products?product_type=part&vehicle_type=car&min_price=500&max_price=3000
-  //     &fits_model_id=<uuid>&q=brake&sort_by=price&sort_order=asc&limit=20&offset=0
+  // public. include_inactive works only for a logged-in admin
   @Get()
-  findAll(@Query() query: ListProductsQueryDto) {
-    return this.productService.findAll(query);
+  @UseGuards(OptionalJwtGuard)
+  findAll(@Query() query: ListProductsQueryDto, @Req() req: { user?: AuthUser | null }) {
+    return this.productService.findAll({ ...query, include_inactive: isAdminUser(req.user) && query.include_inactive === true });
   }
 
   @Post()
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.ADMIN)
   create(@Body() createProductDto: CreateProductDto) {
     return this.productService.create(createProductDto);
   }
 
-  // body is a plain JSON array: [ { ...product }, { ...product } ] (up to 1000 items)
-  // all-or-nothing: if any item is wrong, nothing is saved and every problem is listed with its index
   @Post('bulk')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.ADMIN)
   createBulk(@Body() products: unknown) {
     return this.productService.createBulk(products);
   }
 
+  // public. include_inactive works only for a logged-in admin
   @Get(':id')
+  @UseGuards(OptionalJwtGuard)
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @Query() query: GetProductQueryDto,
+    @Req() req: { user?: AuthUser | null },
   ) {
-    return this.productService.findOne(id, query.include_inactive ?? false);
+    const includeInactive = isAdminUser(req.user) && query.include_inactive === true;
+    return this.productService.findOne(id, includeInactive);
   }
 
   @Patch(':id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.ADMIN)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateProductDto: UpdateProductDto,
@@ -63,13 +57,16 @@ export class ProductController {
     return this.productService.update(id, updateProductDto);
   }
 
-  // deactivates (is_active = false); the product is never deleted
   @Delete(':id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.ADMIN)
   deactivate(@Param('id', ParseIntPipe) id: number) {
     return this.productService.deactivate(id);
   }
 
   @Put(':id/compatibility')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.ADMIN)
   setCompatibility(
     @Param('id', ParseIntPipe) id: number,
     @Body() setCompatibilityDto: SetCompatibilityDto,
@@ -77,8 +74,9 @@ export class ProductController {
     return this.productService.setCompatibility(id, setCompatibilityDto);
   }
 
-  // multipart/form-data, field name "file": jpeg, png or webp, max 2 MB
   @Post(':id/photo')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.ADMIN)
   @UseInterceptors(FileInterceptor('file', productPhotoMulterOptions))
   uploadPhoto(
     @Param('id', ParseIntPipe) id: number,
