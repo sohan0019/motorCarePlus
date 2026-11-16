@@ -1,6 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'crypto';
 import { DataSource, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/jwt.strategy';
 import { PaymentEntity } from './entities/payment.entity';
@@ -10,12 +9,7 @@ import { OrderStatusEnum } from '../../common/enums/order-status.enum';
 import { PaymentMethodEnum } from '../../common/enums/payment-method.enum';
 import { PaymentStatusEnum } from '../../common/enums/payment-status.enum';
 import { RoleEnum } from '../../common/enums/role.enum';
-
-const REF_PREFIX: Record<PaymentMethodEnum, string> = {
-  [PaymentMethodEnum.CASH_ON_DELIVERY]: 'COD',
-  [PaymentMethodEnum.CARD_SIMULATED]: 'CARD',
-  [PaymentMethodEnum.MOBILE_BANKING_SIMULATED]: 'MFS',
-};
+import { makeTransactionRef } from '../../common/helpers/transaction-ref.helper';
 
 @Injectable()
 export class PaymentService {
@@ -69,10 +63,7 @@ export class PaymentService {
 
       payment.status = PaymentStatusEnum.PAID;
       payment.paid_at = new Date();
-      payment.transaction_ref = `SIM-${REF_PREFIX[payment.method]}-${randomUUID()
-        .replace(/-/g, '')
-        .slice(0, 12)
-        .toUpperCase()}`;
+      payment.transaction_ref = makeTransactionRef(payment.method);
       await manager.save(payment);
 
       order.order_status = OrderStatusEnum.PAID;

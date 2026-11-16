@@ -27,6 +27,6 @@ export class PaymentEntity {
   @Column({ type: 'varchar', length: 100, nullable: true })
   transaction_ref!: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   paid_at!: Date | null;
 }

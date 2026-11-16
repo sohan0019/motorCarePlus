@@ -16,12 +16,11 @@ import { OrderStatusEnum } from '../../common/enums/order-status.enum';
 import { RoleEnum } from '../../common/enums/role.enum';
 import { PaymentStatusEnum } from '../../common/enums/payment-status.enum';
 import { fromCents, toCents } from '../../common/helpers/money.helper';
+import { makeTransactionRef } from '../../common/helpers/transaction-ref.helper';
 import { buildPaginatedResponse, DEFAULT_PAGE_LIMIT } from '../../common/helpers/pagination.helper';
 
-// which status changes an admin may make
 const ALLOWED_TRANSITIONS: Record<OrderStatusEnum, OrderStatusEnum[]> = {
   [OrderStatusEnum.PENDING]: [OrderStatusEnum.PAID, OrderStatusEnum.CANCELLED],
-  // a paid order cannot be cancelled for now (there is no refund state for payments)
   [OrderStatusEnum.PAID]: [],
   [OrderStatusEnum.CANCELLED]: [],
 };
@@ -35,14 +34,12 @@ export class OrderService {
     private readonly dataSource: DataSource,
   ) {}
 
-  // a normal user may only open their own orders; an admin may open any
   private assertOwnerOrAdmin(order: OrderEntity, user: AuthUser) {
     if (user.role !== RoleEnum.ADMIN && order.user_id !== user.user_id) {
       throw new ForbiddenException('You can only access your own orders');
     }
   }
 
-  // ---------- checkout (one database transaction) ----------
 
   async checkout(userId: string, dto: CheckoutDto) {
     const isDelivery = dto.fulfilment_method === FulfilmentMethodEnum.DELIVERY;
@@ -51,9 +48,7 @@ export class OrderService {
       throw new BadRequestException('delivery_address is required for delivery');
     }
 
-    // Anything thrown inside the callback rolls the whole transaction back.
     const orderId = await this.dataSource.transaction(async (manager) => {
-      // 1. lock the user's active cart, so the same cart cannot be checked out twice at once
       const cart = await manager.findOne(CartEntity, {
         where: { user_id: userId, status: CartStatusEnum.ACTIVE },
         lock: { mode: 'pessimistic_write' },
@@ -69,7 +64,6 @@ export class OrderService {
         throw new BadRequestException('Your cart is empty');
       }
 
-      // 2. lock the product rows (always in id order, so two checkouts cannot deadlock)
       const productIds = [...new Set(cartItems.map((item) => item.product_id))].sort((a, b) => a - b);
       const products = await manager.find(ProductEntity, {
         where: { id: In(productIds) },
@@ -84,7 +78,6 @@ export class OrderService {
         : [];
       const categoryById = new Map(categories.map((category) => [category.id, category]));
 
-      // 3. check every item first and report all problems together
       const problems: string[] = [];
       for (const item of cartItems) {
         const product = productById.get(item.product_id);
@@ -100,7 +93,6 @@ export class OrderService {
         throw new BadRequestException({ message: problems, error: 'Bad Request', statusCode: 400 });
       }
 
-      // 4. create the order and its items; unit_price is copied from the locked product row
       const lines = cartItems
         .map((item) => ({ item, product: productById.get(item.product_id) as ProductEntity }))
         .sort((a, b) => a.product.id - b.product.id);
@@ -131,7 +123,6 @@ export class OrderService {
         })),
       );
 
-      // 5. reduce stock; the "stock >= qty" guard means it can never go below zero
       for (const { item, product } of lines) {
         const result = await manager
           .createQueryBuilder()
@@ -144,7 +135,6 @@ export class OrderService {
         }
       }
 
-      // 6. create the payment (still pending; POST /payments/pay marks it paid)
       await manager.save(
         manager.create(PaymentEntity, {
           order_id: order.id,
@@ -156,7 +146,6 @@ export class OrderService {
         }),
       );
 
-      // 7. close the cart
       await manager.update(CartEntity, cart.id, { status: CartStatusEnum.CHECKED_OUT });
 
       return order.id;
@@ -165,7 +154,6 @@ export class OrderService {
     return this.findOne(orderId);
   }
 
-  // ---------- list ----------
 
   async findAll(query: ListOrdersQueryDto, user: AuthUser) {
     const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
@@ -173,7 +161,6 @@ export class OrderService {
 
     const where: FindOptionsWhere<OrderEntity> = {};
     if (user.role !== RoleEnum.ADMIN) {
-      // a normal user only ever sees their own orders, whatever filter they send
       where.user_id = user.user_id;
     } else if (query.user_id) {
       where.user_id = query.user_id;
@@ -190,8 +177,6 @@ export class OrderService {
     return buildPaginatedResponse(data, total, limit, offset);
   }
 
-  // ---------- detail (items + payment) ----------
-
   async findOne(id: number, user?: AuthUser) {
     const order = await this.orderRepository.findOne({
       where: { id },
@@ -201,7 +186,7 @@ export class OrderService {
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    // internal calls (after checkout / status change) pass no user; the controller always does
+
     if (user) {
       this.assertOwnerOrAdmin(order, user);
     }
@@ -222,8 +207,6 @@ export class OrderService {
     };
   }
 
-  // ---------- admin status change ----------
-
   async updateStatus(id: number, dto: UpdateOrderStatusDto) {
     await this.dataSource.transaction(async (manager) => {
       const order = await manager.findOne(OrderEntity, {
@@ -243,7 +226,6 @@ export class OrderService {
       }
 
       if (dto.status === OrderStatusEnum.CANCELLED) {
-        // cancelling gives the stock back (product id order, same as checkout)
         const items = await manager.find(OrderItemEntity, {
           where: { order_id: id },
           order: { product_id: 'ASC' },
@@ -256,7 +238,6 @@ export class OrderService {
             .where('id = :productId', { productId: item.product_id, qty: item.quantity })
             .execute();
         }
-        // an unpaid payment cannot be completed any more
         await manager.update(
           PaymentEntity,
           { order_id: id, status: PaymentStatusEnum.PENDING },
@@ -265,12 +246,15 @@ export class OrderService {
       }
 
       if (dto.status === OrderStatusEnum.PAID) {
-        // keep the payment record in step with the order
-        await manager.update(
-          PaymentEntity,
-          { order_id: id, status: PaymentStatusEnum.PENDING },
-          { status: PaymentStatusEnum.PAID, paid_at: new Date() },
-        );
+        const payment = await manager.findOne(PaymentEntity, {
+          where: { order_id: id, status: PaymentStatusEnum.PENDING },
+        });
+        if (payment) {
+          payment.status = PaymentStatusEnum.PAID;
+          payment.paid_at = new Date();
+          payment.transaction_ref = makeTransactionRef(payment.method);
+          await manager.save(payment);
+        }
       }
 
       order.order_status = dto.status;
