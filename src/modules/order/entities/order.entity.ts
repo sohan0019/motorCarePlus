@@ -23,14 +23,13 @@ export class OrderEntity {
   @Column({ type: 'enum', enum: FulfilmentMethodEnum })
   fulfilment_method!: FulfilmentMethodEnum;
 
-  // required when fulfilment_method = delivery (also enforced by a CHECK in the database)
   @Column({ type: 'text', nullable: true })
   delivery_address!: string | null;
 
   @Column({ type: 'enum', enum: OrderStatusEnum, default: OrderStatusEnum.PENDING })
   order_status!: OrderStatusEnum;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamptz' })
   created_at!: Date;
 
   @OneToMany(() => OrderItemEntity, (item) => item.order)
