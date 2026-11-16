@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsUUID, Length, Max, Min, ValidateArguments, ValidateIf } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsUUID, Length, Max, Min, ValidationArguments, ValidateIf } from 'class-validator';
 import { FulfilmentMethodEnum } from '../../../common/enums/fulfilment-method.enum';
 import { OrderStatusEnum } from '../../../common/enums/order-status.enum';
 import { PaymentMethodEnum } from '../../../common/enums/payment-method.enum';
