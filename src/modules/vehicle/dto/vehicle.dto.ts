@@ -7,8 +7,9 @@ export class CreateVehicleDto {
   })
   type!: VehicleTypeEnum;
 
-  @IsUUID()
-  model_id!: string;
+  @IsString()
+  @IsNotEmpty()
+  model!: string;
 
   @IsOptional()
   @IsInt({ message: 'Year must be a valid integer' })

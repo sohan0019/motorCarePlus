@@ -38,9 +38,6 @@ export class ProductEntity {
   @Column({ type: 'varchar', length: 200 })
   name!: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true })
-  sku!: string;
-
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
@@ -50,7 +47,6 @@ export class ProductEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   market_price!: string | null;
 
-  // the database also has CHECK (stock >= 0)
   @Column({ type: 'int', default: 0 })
   stock!: number;
 

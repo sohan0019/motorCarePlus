@@ -27,44 +27,92 @@ export class VehicleService {
       where: { id: model_id },
       relations: { make: true },
     });
+
     if (!model) {
       throw new NotFoundException('Vehicle model not found');
     }
+
     if (model.make.vehicle_type !== type) {
-      throw new BadRequestException('This model does not belong to the selected vehicle type');
+      throw new BadRequestException(
+        'This model does not belong to the selected vehicle type',
+      );
     }
+
     return model;
   }
 
-  private async assertRegistrationFree(registration_number: string, ignoreId?: string) {
-    const found = await this.vehicleRepository.findOne({ where: { registration_number } });
+  private async assertRegistrationFree(
+    registration_number: string,
+    ignoreId?: string,
+  ) {
+    const found = await this.vehicleRepository.findOne({
+      where: { registration_number },
+    });
+
     if (found && found.id !== ignoreId) {
-      throw new ConflictException('This registration number is already saved');
+      throw new ConflictException(
+        'This registration number is already saved',
+      );
     }
   }
 
   private assertOwnerOrAdmin(vehicle: VehicleEntity, user: AuthUser) {
-    if (user.role !== RoleEnum.ADMIN && vehicle.user_id !== user.user_id) {
-      throw new ForbiddenException('You can only access your own vehicles');
+    if (
+      user.role !== RoleEnum.ADMIN &&
+      vehicle.user_id !== user.user_id
+    ) {
+      throw new ForbiddenException(
+        'You can only access your own vehicles',
+      );
     }
   }
 
-  async create(user_id: string, createVehicleDto: CreateVehicleDto): Promise<VehicleEntity> {
+  async create(
+    user_id: string,
+    createVehicleDto: CreateVehicleDto,
+  ): Promise<VehicleEntity> {
     await this.userService.findOne(user_id);
-    await this.getModelOrFail(createVehicleDto.model_id, createVehicleDto.type);
 
-    const registration_number = createVehicleDto.registration_number.trim().toUpperCase();
+    const matchingModels = await this.modelRepository
+      .createQueryBuilder('model')
+      .innerJoinAndSelect('model.make', 'make')
+      .where('LOWER(TRIM(model.name)) = LOWER(:modelName)', {
+        modelName: createVehicleDto.model.trim(),
+      })
+      .andWhere('make.vehicle_type = :type', {
+        type: createVehicleDto.type,
+      })
+      .getMany();
+
+    if (matchingModels.length === 0) {
+      throw new NotFoundException(
+        `Model "${createVehicleDto.model}" was not found for vehicle type "${createVehicleDto.type}"`,
+      );
+    }
+
+    if (matchingModels.length > 1) {
+      throw new ConflictException(
+        `More than one ${createVehicleDto.type} model is named "${createVehicleDto.model}". The model name is ambiguous.`,
+      );
+    }
+
+    const matchedModel = matchingModels[0];
+
+    const registration_number =
+      createVehicleDto.registration_number.trim().toUpperCase();
+
     await this.assertRegistrationFree(registration_number);
 
     const saved = await this.vehicleRepository.save(
       this.vehicleRepository.create({
         user_id,
-        model_id: createVehicleDto.model_id,
+        model_id: matchedModel.id,
         type: createVehicleDto.type,
         year: createVehicleDto.year ?? null,
         registration_number,
       }),
     );
+
     return this.findOne(saved.id);
   }
 
@@ -73,9 +121,13 @@ export class VehicleService {
       const where = query.where;
       query = {
         ...query,
-        where: Array.isArray(where) && where.length
-          ? where.map((w) => ({ ...w, user_id: user.user_id }))
-          : { ...(Array.isArray(where) ? {} : where), user_id: user.user_id },
+        where:
+          Array.isArray(where) && where.length
+            ? where.map((w) => ({ ...w, user_id: user.user_id }))
+            : {
+                ...(Array.isArray(where) ? {} : where),
+                user_id: user.user_id,
+              },
       };
     }
 
@@ -86,6 +138,7 @@ export class VehicleService {
       select: undefined,
       relations: { model: { make: true } },
     });
+
     return { data, total };
   }
 
@@ -94,28 +147,44 @@ export class VehicleService {
       where: { id },
       relations: { model: { make: true } },
     });
+
     if (!vehicle) {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
     }
+
     if (user) {
       this.assertOwnerOrAdmin(vehicle, user);
     }
+
     return vehicle;
   }
 
-  async update(id: string, updateVehicleDto: UpdateVehicleDto, user: AuthUser): Promise<VehicleEntity> {
+  async update(
+    id: string,
+    updateVehicleDto: UpdateVehicleDto,
+    user: AuthUser,
+  ): Promise<VehicleEntity> {
     const vehicle = await this.findOne(id, user);
-    const changes: Partial<Pick<VehicleEntity, 'model_id' | 'year' | 'registration_number'>> = {};
+    const changes: Partial<
+      Pick<VehicleEntity, 'model_id' | 'year' | 'registration_number'>
+    > = {};
 
     if (updateVehicleDto.model_id) {
-      await this.getModelOrFail(updateVehicleDto.model_id, vehicle.type);
+      await this.getModelOrFail(
+        updateVehicleDto.model_id,
+        vehicle.type,
+      );
       changes.model_id = updateVehicleDto.model_id;
     }
+
     if (updateVehicleDto.registration_number) {
-      const registration_number = updateVehicleDto.registration_number.trim().toUpperCase();
+      const registration_number =
+        updateVehicleDto.registration_number.trim().toUpperCase();
+
       await this.assertRegistrationFree(registration_number, id);
       changes.registration_number = registration_number;
     }
+
     if (updateVehicleDto.year !== undefined) {
       changes.year = updateVehicleDto.year;
     }
@@ -123,6 +192,7 @@ export class VehicleService {
     if (Object.keys(changes).length > 0) {
       await this.vehicleRepository.update(id, changes);
     }
+
     return this.findOne(id);
   }
 
@@ -139,6 +209,19 @@ export class VehicleService {
     });
   }
 
+  findAllMakesWithModels(query: GetMakesQueryDto) {
+    return this.makeRepository.find({
+      where: query.type ? { vehicle_type: query.type } : {},
+      relations: { models: true },
+      order: {
+        name: 'ASC',
+        models: {
+          name: 'ASC',
+        },
+      },
+    });
+  }
+
   findAllModels(query: GetModelsQueryDto) {
     return this.modelRepository.find({
       where: query.make_id ? { make_id: query.make_id } : {},
@@ -149,20 +232,34 @@ export class VehicleService {
 
   async createMake(createMakeDto: CreateMakeDto) {
     const name = createMakeDto.name.trim();
+
     const existing = await this.makeRepository.findOne({
-      where: { name, vehicle_type: createMakeDto.vehicle_type },
+      where: {
+        name,
+        vehicle_type: createMakeDto.vehicle_type,
+      },
     });
+
     if (existing) {
-      throw new ConflictException('This make already exists for this vehicle type');
+      throw new ConflictException(
+        'This make already exists for this vehicle type',
+      );
     }
 
     const make = await this.makeRepository.save(
-      this.makeRepository.create({ name, vehicle_type: createMakeDto.vehicle_type }),
+      this.makeRepository.create({
+        name,
+        vehicle_type: createMakeDto.vehicle_type,
+      }),
     );
 
     if (createMakeDto.models?.length) {
-      await this.modelRepository.save(createMakeDto.models.map((model) =>
-          this.modelRepository.create({ make_id: make.id, name: model.trim() }),
+      await this.modelRepository.save(
+        createMakeDto.models.map((model) =>
+          this.modelRepository.create({
+            make_id: make.id,
+            name: model.trim(),
+          }),
         ),
       );
     }
@@ -174,21 +271,34 @@ export class VehicleService {
   }
 
   async createModel(createModelDto: CreateModelDto) {
-    const make = await this.makeRepository.findOne({ where: { id: createModelDto.make_id } });
+    const make = await this.makeRepository.findOne({
+      where: { id: createModelDto.make_id },
+    });
+
     if (!make) {
       throw new NotFoundException('Vehicle make not found');
     }
 
     const name = createModelDto.name.trim();
+
     const existing = await this.modelRepository.findOne({
-      where: { make_id: createModelDto.make_id, name },
+      where: {
+        make_id: createModelDto.make_id,
+        name,
+      },
     });
+
     if (existing) {
-      throw new ConflictException('This model already exists for this make');
+      throw new ConflictException(
+        'This model already exists for this make',
+      );
     }
 
     return this.modelRepository.save(
-      this.modelRepository.create({ make_id: createModelDto.make_id, name }),
+      this.modelRepository.create({
+        make_id: createModelDto.make_id,
+        name,
+      }),
     );
   }
 }

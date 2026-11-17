@@ -10,13 +10,16 @@ import { RolesGuard } from '../../common/guard';
 export class VehicleCatalogController {
   constructor(private readonly vehicleService: VehicleService) {}
 
-  // GET /vehicles/catalog/makes?type=car
   @Get('makes')
   findAllMakes(@Query() query: GetMakesQueryDto) {
     return this.vehicleService.findAllMakes(query);
   }
 
-  // Admin only
+  @Get('makes-with-models')
+  findAllMakesWithModels(@Query() query: GetMakesQueryDto) {
+    return this.vehicleService.findAllMakesWithModels(query);
+  }
+
   @Post('makes')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.ADMIN)
@@ -29,7 +32,6 @@ export class VehicleCatalogController {
     return this.vehicleService.findAllModels(query);
   }
 
-  // Admin only
   @Post('models')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.ADMIN)

@@ -1,32 +1,11 @@
-
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-
-import {
-  DataSource,
-  FindManyOptions,
-  FindOptionsWhere,
-  In,
-  Repository,
-} from 'typeorm';
-
-import {
-  BookingEntity,
-  BookingStatusEnum,
-} from './entities/booking.entity';
-
+import { DataSource, FindManyOptions, FindOptionsWhere, In, Repository, } from 'typeorm';
+import { BookingEntity, BookingStatusEnum, } from './entities/booking.entity';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
-
 import { ServiceEntity } from '../service-catalog/entities/service.entity';
 import { VehicleEntity } from '../vehicle/entities/vehicle.entity';
-
 import type { AuthUser } from '../auth/jwt.strategy';
 import { RoleEnum } from '../../common/enums/role.enum';
 
@@ -38,13 +17,10 @@ export class BookingsService {
   constructor(
     @InjectRepository(BookingEntity)
     private readonly bookingRepository: Repository<BookingEntity>,
-
     @InjectRepository(ServiceEntity)
     private readonly serviceRepository: Repository<ServiceEntity>,
-
     @InjectRepository(VehicleEntity)
     private readonly vehicleRepository: Repository<VehicleEntity>,
-
     private readonly dataSource: DataSource,
   ) {}
 
@@ -173,11 +149,31 @@ export class BookingsService {
       throw new NotFoundException('Active service not found');
     }
 
-    const vehicle = await this.vehicleRepository.findOne({
-      where: {
-        id: dto.vehicle_id,
-      },
-    });
+    const matchingVehicles = await this.vehicleRepository
+      .createQueryBuilder('vehicle')
+      .innerJoinAndSelect('vehicle.model', 'model')
+      .where('vehicle.user_id = :userId', {
+        userId: user.user_id,
+      })
+      .andWhere(
+        'LOWER(TRIM(model.name)) = LOWER(:modelName)',
+        {
+          modelName: dto.vehicle_model.trim(),
+        },
+      )
+      .getMany();
+
+    if (matchingVehicles.length === 0) {
+      throw new NotFoundException(`You have not registered a vehicle with model "${dto.vehicle_model}"`);
+    }
+
+    if (matchingVehicles.length > 1) {
+      throw new BadRequestException(
+        `You have multiple registered vehicles with model "${dto.vehicle_model}". Please use a more specific vehicle identifier.`,
+      );
+    }
+
+    const vehicle = matchingVehicles[0];
 
     if (!vehicle) {
       throw new NotFoundException('Vehicle not found');
@@ -237,7 +233,7 @@ export class BookingsService {
           date: dto.booking_date,
         })
         .andWhere('booking.vehicle_id = :vehicleId', {
-          vehicleId: dto.vehicle_id,
+          vehicleId: vehicle.id,
         })
         .andWhere('booking.status IN (:...statuses)', {
           statuses: [
@@ -299,7 +295,10 @@ export class BookingsService {
       }
 
       const booking = bookingRepo.create({
-        ...dto,
+        service_id: dto.service_id,
+        vehicle_id: vehicle.id,
+        booking_date: dto.booking_date,
+        start_time: dto.start_time,
         user_id: user.user_id,
         vehicle_type: vehicleType,
         end_time: endTime,

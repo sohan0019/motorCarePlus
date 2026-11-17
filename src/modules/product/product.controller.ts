@@ -14,7 +14,6 @@ import type { AuthUser } from '../auth/jwt.strategy';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
-  // public. include_inactive works only for a logged-in admin
   @Get()
   @UseGuards(OptionalJwtGuard)
   findAll(@Query() query: ListProductsQueryDto, @Req() req: { user?: AuthUser | null }) {
@@ -35,7 +34,6 @@ export class ProductController {
     return this.productService.createBulk(products);
   }
 
-  // public. include_inactive works only for a logged-in admin
   @Get(':id')
   @UseGuards(OptionalJwtGuard)
   findOne(

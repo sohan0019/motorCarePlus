@@ -19,7 +19,6 @@ export class VehicleController {
     return this.vehicleService.create(req.user.user_id, createVehicleDto);
   }
 
-  // GET /vehicles?type=car&limit=10&offset=0
   @Get()
   findAll(
     @Query(new QueryParserPipe('MANY', ['registration_number']))

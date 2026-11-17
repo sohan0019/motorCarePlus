@@ -12,9 +12,6 @@ import { isAdminUser } from '../../common/helpers/admin.helper';
 export class CategoryController {
   constructor(private readonly catalogueService: CatalogueService) {}
 
-  // public: the website shows categories before login.
-  // include_inactive=true is honoured only for a logged-in admin; for anyone else it is ignored.
-  // GET /catalogue/categories?product_type=part&parent_id=3
   @Get()
   @UseGuards(OptionalJwtGuard)
   findAll(
@@ -25,7 +22,6 @@ export class CategoryController {
     return this.catalogueService.findAllCategories({ ...query, include_inactive: includeInactive });
   }
 
-  // admin only
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.ADMIN)
@@ -33,7 +29,6 @@ export class CategoryController {
     return this.catalogueService.createCategory(createCategoryDto);
   }
 
-  // admin only
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.ADMIN)
