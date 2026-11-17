@@ -18,7 +18,6 @@ import { StorageModule } from '../../providers/storage/local/storage.module';
   ],
   controllers: [ProductController, PartController, DecorationController],
   providers: [ProductService],
-  // cart and order modules will need to read products
   exports: [ProductService, TypeOrmModule],
 })
 export class ProductModule {}

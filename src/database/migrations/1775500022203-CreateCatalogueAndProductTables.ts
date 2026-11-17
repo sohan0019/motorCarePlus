@@ -130,13 +130,6 @@ export class CreateCatalogueAndProductTables1775500022203 implements MigrationIn
             isNullable: false,
           },
           {
-            name: 'sku',
-            type: 'varchar',
-            length: '100',
-            isUnique: true,
-            isNullable: false,
-          },
-          {
             name: 'description',
             type: 'text',
             isNullable: true,
